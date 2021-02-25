@@ -69,7 +69,7 @@
 				if cdata[str] and cdata[str][1] > RealTime() then
 					return cdata[str][2]
 				end
-			local st = con:GetFloat()
+			local st = con:GetFloat() / 60
 			local t = CurTime()
 			local t_start = aimdata[str][2] or 0
 			local t_stop = t_start + aimdata[str][3] / math.max(st,0.5)
@@ -212,7 +212,7 @@
 		elseif IsColor(var) and netcashe[str] then
 			local c = netcashe[str]
 			if var.r == c.r and var.g == c.g and var.b == c.b and var.a == c.a then
-				return
+				return -- Also a dupe
 			end
 		end
 		netcashe[str] = var
@@ -245,7 +245,7 @@
 					net.Broadcast()
 				end
 				-- Notify scripts that something changed
-				hook.Call("StormFox - NetDataChange",nil,str,var,over_seconds)
+				hook.Run("StormFox - NetDataChange",str,var,over_seconds)
 				return
 			end
 			network_aimdata[str] = {var,t,over_seconds}
@@ -259,7 +259,7 @@
 				net.Broadcast()
 			end
 		-- Notify scripts that something changed
-			hook.Call("StormFox - NetDataChange",nil,str,var,over_seconds)
+			hook.Run("StormFox - NetDataChange",str,var,over_seconds)
 	end
 	local cdata = {}
 	function StormFox.GetNetworkData(str,base)
@@ -273,7 +273,7 @@
 			end
 
 		local t = CurTime()
-		local st = con:GetFloat()
+		local st = con:GetFloat() / 60
 		local t_start = network_aimdata[str][2] or 0
 		local t_stop = t_start + (network_aimdata[str][3] or 0) / math.max(st,0.5)
 		-- Is it old aimdata?

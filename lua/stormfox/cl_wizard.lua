@@ -41,7 +41,7 @@ Functions
 				col.a = 25
 			end
 			surface.SetTextColor(col)
-			surface.SetFont("SkyFox-Console")
+			surface.SetFont("StormFox-Console")
 			local tw,th = surface.GetTextSize(self.text)
 			surface.SetTextPos(w / 2 - tw / 2,h / 2 - th / 2)
 			surface.DrawText(self.text)
@@ -81,11 +81,11 @@ Problem finder
 			panel:SetTitle("StormFox: " .. (title or "A problem occurred"))
 			local textbox = vgui.Create("DLabel",panel)
 			textbox:SetSize(w,h)
-			textbox:SetFont("SkyFox-Console")
+			textbox:SetFont("StormFox-Console")
 			local ctext = ""
 			local texta = {}
 			for word in string.gmatch( problem or "An unknown error occurred.", "[^%s]+" ) do
-				surface.SetFont("SkyFox-Console")
+				surface.SetFont("StormFox-Console")
 				local new_text = ctext .. (#ctext > 0 and " " or "") .. word
 				if surface.GetTextSize(new_text) < w - 10 then
 					ctext = new_text
@@ -102,7 +102,7 @@ Problem finder
 			local tick
 			if dontshow_option then
 				tick = vgui.Create("DCheckBoxLabel",panel)
-				tick:SetText("Never show this again.")
+				tick:SetText(StormFox.Language.Translate("sf_warning_missingmaterial.nevershow"))
 				tick:SetValue(0)
 				tick:SizeToContents()
 				tick:SetPos(w - tick:GetSize() - 2,h - 16)
@@ -144,6 +144,10 @@ Problem finder
 Material scanner
 ---------------------------------------------------------------------------]]
 	local material_list = {
+		"stormfox/effects/foot_hq.png",
+		"stormfox/effects/foot_hql.png",
+		"stormfox/effects/foot_m.png",
+		"stormfox/effects/foot_s.png",
 		"stormfox/effects/lightning.png",
 		"stormfox/effects/lightning2.png",
 		"stormfox/effects/lightning3.png",
@@ -161,9 +165,14 @@ Material scanner
 		"stormfox/models/combine_light_off",
 		"stormfox/models/firewood_burn",
 		"stormfox/models/moon_edit",
+		"stormfox/models/oil_lamp",
+		"stormfox/models/oil_lamp_glass",
 		"stormfox/models/parklight_off",
 		"stormfox/models/sf_effect_ent",
 		"stormfox/models/sun_edit",
+		"stormfox/models/torch_bark",
+		"stormfox/models/torch_base",
+		"stormfox/models/torch_cap",
 		"stormfox/moon_phases/0.png",
 		"stormfox/moon_phases/25.png",
 		"stormfox/moon_phases/50.png",
@@ -176,10 +185,12 @@ Material scanner
 		"stormfox/symbols/Icy.png",
 		"stormfox/symbols/Night - Cloudy.png",
 		"stormfox/symbols/Night.png",
+		"stormfox/symbols/Radioactive.png",
 		"stormfox/symbols/Raining - Thunder.png",
 		"stormfox/symbols/Raining - Windy.png",
 		"stormfox/symbols/Raining.png",
 		"stormfox/symbols/RainingSnowing.png",
+		"stormfox/symbols/Sandstorm.png",
 		"stormfox/symbols/Snowing.png",
 		"stormfox/symbols/Sunny.png",
 		"stormfox/symbols/Thunder.png",
@@ -190,7 +201,10 @@ Material scanner
 		"stormfox/symbols/time_speedup.png",
 		"stormfox/symbols/time_speedup2.png",
 		"stormfox/symbols/time_speedup3.png",
+		"stormfox/tool/sf_screen",
+		"stormfox/tool/sf_screen_bg",
 		"stormfox/SF.png",
+		"stormfox/SF_cl_settings.png",
 		"stormfox/StormFox.png",
 		"stormfox/clouds_big.png",
 		"stormfox/imdoinguselessthings.png",
@@ -201,6 +215,7 @@ Material scanner
 		"stormfox/small_shadow_sprite",
 		"stormfox/snow-multi.png",
 	}
+
 
 	--[[ -- Function to update the materiallist.
 	function PrintDebugList()
@@ -227,7 +242,7 @@ Material scanner
 		print("	}")
 	end
 	--]]
-	timer.Simple(30,function()
+	timer.Simple(10,function()
 		local a = {}
 		for _,matstr in ipairs(material_list) do
 			if Material(matstr):IsError() then
@@ -235,11 +250,9 @@ Material scanner
 			end
 		end
 		if #a > 0 then
-			ShowMessageBox("You're missing materials","You're missing " .. #a .. " material" .. (#a ~= 1 and "s" or "") .. ". ",true)
-			print("[StormFox]: Missing materials:")
+			ShowMessageBox(StormFox.Language.Translate("sf_warning_missingmaterial.title"),StormFox.Language.Format("sf_warning_missingmaterial",#a),true)
+			print("[StormFox]: " .. StormFox.Language.Translate("sf_warning_missingmaterial.title"))
 			PrintTable(a)
-		else
-			print("[StormFox]: No missing materials.")
 		end
 	end)
 --[[-------------------------------------------------------------------------

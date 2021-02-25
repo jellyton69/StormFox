@@ -196,7 +196,6 @@ local IgnoreMaps = {
 
 -- Setup SQL functions
 	if not sql.TableExists( "sf_mapinfo" ) then
-		print("[StormFox] Create SQL database.")
 		sql.Query( "CREATE TABLE IF NOT EXISTS sf_mapinfo( map TEXT NOT NULL PRIMARY KEY, mapdata TEXT );" )
 	end
 
@@ -228,10 +227,11 @@ local IgnoreMaps = {
 		t["env_tonemap_controller"] = "Enables light-bloom/tonemap effects."
 		t["env_fog_controller"] = "Allows to control and edit fog."
 		t["shadow_control"] = "Allows to control shadows."
+		t[".ain nodes"] = "Allows special map-effects."
 	local bonus_t = {}
 		bonus_t["trigger"] = "This map have extra light-effects and triggers."
 
-	function GetMapData()
+	local function GetMapData()
 		local t_l = table.GetKeys(t)
 		local data = {}
 		local n,totaln = 0,1
@@ -241,6 +241,9 @@ local IgnoreMaps = {
 			if data[str] then
 				n = n + 1
 			end
+		end
+		if StormFox.AIAinIsValid() then
+			n = n + 1
 		end
 		data["3D Skybox"] = StormFox.Is3DSkybox()
 		if StormFox.Is3DSkybox() then
@@ -253,13 +256,13 @@ local IgnoreMaps = {
 				n = n + 1
 			end
 		end
+		data[".ain nodes"] = StormFox.AIAinIsValid()
 		data["bonus"] = n
 		return data
 	end
 	hook.Add("StormFox - NetDataChange","StormFox - SaveMapdata",function()
 		-- We got new data
 		timer.Simple(6,function()
-			print("[StormFox] Updating mapdata.")
 			local t = GetMapData()
 			if t.percent_support > 0 then
 				SaveUpdateMapData(t)
@@ -320,6 +323,8 @@ local IgnoreMaps = {
 	local cross = Material("debug/particleerror")
 	local check = Material("vgui/hud/icon_check")
 	local question = Material("vgui/avatar_default")
+	local medal = Material("icon16/award_star_gold_1.png")
+	local l = 12
 	local function paintDetails(self,w,h)
 		surface.SetDrawColor(colors[2])
 		surface.SetDrawColor(Color(0,0,0,200))
@@ -328,18 +333,37 @@ local IgnoreMaps = {
 		surface.DrawTexturedRectRotated(w - 10 ,h / 2,20,h,180)
 		surface.DrawTexturedRectRotated(10 ,h / 2,20,h,0)
 		if not self.mapdata.percent_support then
-			draw.DrawText("Not scanned","SkyFox-Console",w / 2,0,Color(255,255,255),1)
+			draw.DrawText("Not scanned","mgui_default",w / 2,0,Color(255,255,255),1)
 			return
 		end
-		draw.DrawText("Map Entities","SkyFox-Console_Tiny",w / 2,0,Color(255,255,255),1)
+		draw.DrawText("Map Entities","mgui_default",w / 2,0,Color(255,255,255),1)
 		local y = 0
 		local i = 0
 		local checkVersion = self
-		surface.SetFont("SkyFox-Console_Tiny")
+		surface.SetFont("mgui_default")
 		for str,helptext in pairs(t) do
 			i = i + 1
 			local b = self.mapdata[str]
-			surface.SetTextPos(18,i * 10 + 10)
+			surface.SetTextPos(18,i * l + 2)
+			if b then
+				surface.SetTextColor(0,255,0)
+				surface.SetDrawColor(255,255,255)
+				surface.SetMaterial(check)
+			elseif b == false then
+				surface.SetTextColor(255,255,255)
+				surface.SetDrawColor(255,0,0)
+				surface.SetMaterial(cross)
+			else
+				surface.SetTextColor(150,150,255)
+				surface.SetDrawColor(150,150,255)
+				surface.SetMaterial(question)
+			end
+			surface.DrawText(str)
+			surface.DrawTexturedRect(5,i * l + 2,10,10)
+			y = i * l + 2 + l
+		end
+		local b = self.mapdata["3D Skybox"]
+			surface.SetTextPos(18,y)
 			if b then
 				surface.SetTextColor(0,255,0)
 				surface.SetDrawColor(255,255,255)
@@ -354,37 +378,16 @@ local IgnoreMaps = {
 				surface.SetMaterial(question)
 			end
 
-			surface.DrawText(str)
-			surface.DrawTexturedRect(5,i * 10 + 10,10,10)
-			y = i * 10 + 20
-		end
-		local b = self.mapdata["3D Skybox"]
-		surface.SetTextPos(18,y)
-		if b then
-			surface.SetTextColor(0,255,0)
-			surface.SetDrawColor(255,255,255)
-			surface.SetMaterial(check)
-		elseif b == false then
-			surface.SetTextColor(255,255,255)
-			surface.SetDrawColor(255,0,0)
-			surface.SetMaterial(cross)
-		else
-			surface.SetTextColor(150,150,255)
-			surface.SetDrawColor(150,150,255)
-			surface.SetMaterial(question)
-		end
-
 		surface.DrawText("3D Skybox")
 		surface.DrawTexturedRect(5,y,10,10)
 
 		if (self.mapdata["bonus"] or 0) > 0 then
-			draw.DrawText("Extra map support","SkyFox-Console_Tiny",w / 2,y + 15,Color(255,255,255),1)
-			surface.SetTextPos(18,y + 25)
+			surface.SetTextPos(18,y + 12)
 			surface.SetTextColor(0,255,0)
 			surface.SetDrawColor(255,255,255)
-			surface.SetMaterial(check)
-			surface.DrawText("Map Effects/ Triggers")
-			surface.DrawTexturedRect(5,y + 25,10,10)
+			surface.SetMaterial(medal)
+			surface.DrawText("Map Triggers")
+			surface.DrawTexturedRect(5,y + 12,10,10)
 		end
 	end
 
@@ -419,7 +422,7 @@ local IgnoreMaps = {
 				CreateMaplist()
 			end
 
-			local panel = vgui.Create("DFrame")
+			local panel = mgui.Create("DFrame")
 			local w,h = 160 + 10 + (browserIcon_width + 8) * 6,550
 			panel:SetSize(w,h)
 			panel:SetTitle("StormFox Map Browser")
@@ -431,18 +434,17 @@ local IgnoreMaps = {
 				surface.DrawRect(0,0,w,24)
 			end
 
-			local side_panel = vgui.Create("DPanel",panel)
-			local category_list = vgui.Create("DScrollPanel",side_panel)
+			local side_panel = mgui.Create("DPanel",panel)
+			local category_list = mgui.Create("DScrollPanel",side_panel)
 				panel.category_list = category_list
 				category_list.on = nil
 			side_panel:SetPos(0,24)
 			side_panel:SetSize(160,h)
 			-- Create maplist
-				local d_map_list = vgui.Create("DScrollPanel",panel)
+				local d_map_list = mgui.Create("DScrollPanel",panel)
 				d_map_list:SetPos(160,24)
 				d_map_list:SetSize(w - 160,h - 24)
 
-			local medal = Material("icon16/award_star_gold_1.png")
 			local function PopulateLayout(panel,category)
 				panel.VBar:SetScroll(0)
 				if panel.map_table then
@@ -450,13 +452,13 @@ local IgnoreMaps = {
 				end
 				if not map_list[category] then return end
 				--panel:PerformLayout()
-				local map_table = vgui.Create( "DIconLayout", d_map_list )
+				local map_table = mgui.Create( "DIconLayout", d_map_list )
 					map_table:Dock( FILL )
 					map_table:SetBorder(5)
 					map_table:SetSpaceX( 5 )
 					map_table:SetSpaceY( 5 )
 				panel.map_table = map_table
-			-- List Logic and mapbuttons
+				-- List Logic and mapbuttons
 				category_list.on = category
 				map_table:SetSize(w - 160,200 + math.ceil(#map_list[category] / 4) * (browserIcon_height + 10) - 24)
 				for _,map in ipairs(map_list[category]) do
@@ -473,6 +475,13 @@ local IgnoreMaps = {
 					else
 						btn:SetImage("maps/noicon.png")
 					end
+					btn.outdate = false
+					for str,helptext in pairs(t) do
+						local b = btn.mapdata[str]
+						if b == nil then
+							btn.outdate = true
+						end
+					end 
 					function btn:PaintOver(w,h)
 						local p = self.mapdata.percent_support or 0
 						local b = self.mapdata.bonus or 0
@@ -485,8 +494,11 @@ local IgnoreMaps = {
 						if self.mapdata.percent_support then
 							surface.SetDrawColor(255,50,50,105)
 							surface.DrawRect(w * p,h - 20,w * (1-p),4)
-
-							surface.SetDrawColor(0,255,0,255)
+							if self.outdate then
+								surface.SetDrawColor(155,155,255,255)
+							else
+								surface.SetDrawColor(0,255,0,255)
+							end
 							surface.DrawRect(0,h - 20,w * p,4)
 						end
 						for i = 1,b do

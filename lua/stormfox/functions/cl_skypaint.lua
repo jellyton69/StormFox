@@ -60,10 +60,10 @@
 	local max,round,clamp = math.max,math.Round,math.Clamp
 	local oldSunSize
 	local max = math.max
-	local con = GetConVar("sf_disableskybox")
+	local con = GetConVar("sf_skybox")
 	hook.Add("Think","StormFox - SkyThink",function()
 		if not IsValid(g_SkyPaint) then return end
-		if con and con:GetBool() then return end
+		if con and not con:GetBool() then return end
 			local tl = StormFox.GetData("ThunderLight") or 0
 			local topColor = StormFox.GetData("SkyTopColor") or Color(51,127.5,255)
 			g_SkyPaint:SetTopColor(ColVec(Color(max(topColor.r,tl),max(topColor.g,tl),max(topColor.b,tl)),255))
@@ -89,6 +89,7 @@
 			local n = StormFox.GetData("StarFade") or 1.5
 			if n <= 0 then
 				g_SkyPaint:SetDrawStars(false)
+				g_SkyPaint:SetStarFade(0)
 			else
 				g_SkyPaint:SetDrawStars(true)
 				g_SkyPaint:SetStarSpeed((StormFox.GetData("StarSpeed") or 0.001) * StormFox.GetTimeSpeed())
@@ -96,7 +97,6 @@
 				g_SkyPaint:SetStarScale(StormFox.GetData("StarScale") or 0.5)
 				g_SkyPaint:SetStarTexture(StormFox.GetData("StarTexture","skybox/starfield"))
 			end
-
 	end)
 
 -- Shooting stars

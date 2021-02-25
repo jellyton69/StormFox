@@ -7,21 +7,13 @@ if SERVER then
 	--StormFox.SetNetworkData("CloudSeed",math.random(100))
 	hook.Add("StormFox - NewWeather","StormFox - CloudSeed",function(weather,old_weather)
 		if old_weather ~= "clear" then return end
-		timer.Create("StormFox - SoundSeed",time or 0,1,function()
-			StormFox.SetNetworkData("CloudSeed",math.random(100))
-		end)
+		StormFox.SetNetworkData("CloudSeed",math.random(100))
 	end)
 	return
 end
 
--- render.OverrideBlendFunc is to be replaced by render.OverrideBlend .. we need to be sure both versions work (Chrome, current and furture).
-	local function render_OverrideBlend(enabled, srcBlend, destBlend, blendFunc, srcBlendAlpha, destBlendAlpha, blendFuncAlpha)
-		if not render.OverrideBlendFunc then return end
-		render.OverrideBlendFunc( enabled, srcBlend, destBlend, srcBlendAlpha, destBlendAlpha )
-	end
-	if render.OverrideBlend then
-		render_OverrideBlend = render.OverrideBlend
-	end
+-- render.OverrideBlend
+	local render_OverrideBlend = render.OverrideBlend
 
 -- Localize for optimisasion
 	local render_DrawQuadEasy = render.DrawQuadEasy
@@ -80,7 +72,7 @@ end
 		local texscale = 512
 		local half_texscale = texscale / 2 
 		for i=1,4 do
-			sky_rts[i] = GetRenderTargetEx( "StormFox-Sky" .. i, texscale, texscale, 1, MATERIAL_RT_DEPTH_NONE, 2, CREATERENDERTARGETFLAGS_UNFILTERABLE_OK, IMAGE_FORMAT_RGBA8888)
+			sky_rts[i] = GetRenderTargetEx( "StormFox - Sky" .. i, texscale, texscale, 1, MATERIAL_RT_DEPTH_NONE, 2, CREATERENDERTARGETFLAGS_UNFILTERABLE_OK, IMAGE_FORMAT_RGBA8888)
 		end
 
 	local cloudbig = Material("stormfox/clouds_big.png","nocull noclamp smooth")
@@ -123,17 +115,16 @@ end
 		end
 
 	-- Cloud movement
-		hook.Add("HUDPaint","StormFox-Cloud-Think",function()
+		hook.Add("Think","StormFox - Cloud-Think",function()
 			local w_ang = rad(StormFox.GetNetworkData("WindAngle",0))
 			local w_force = max(StormFox.GetNetworkData("Wind",0) * (FrameTime() / 8),0.01)
 			local x_w,y_w = cos(w_ang) * w_force,sin(w_ang) * w_force
 			for i=1,4 do
 				local ri = 5 - i
 				local x,y = offset[i][1],offset[i][2]
-				offset[i] = {x + x_w * ri,y + y_w * ri}
+				offset[i] = {x + x_w * ri ,y + y_w * ri}
 			end
 		end)
-
 	-- Cloud-Rendering
 	--[[-------------------------------------------------------------------------
 		- Render the layer:
@@ -275,17 +266,14 @@ end
 				surface.DrawTexturedRect(0,0,texscale,texscale,0,0)
 			RTEnd(sky_mats[2])
 			]]
-
 	end
 
 -- render.CullMode(1) render render.CullMode(0) will change the render
 -- Cloud layer
-hook.Add("StormFox - MiddleSkyRender","StormFox-CloudsRender",function()
-	--if true then return end
+hook.Add("StormFox - RenderClouds","StormFox - CloudsRender",function(c_pos,map_center)
+	if not StormFox.EFEnabled() then return end
 	if not StormFox.MapOBBCenter or not StormFox.GetEyePos then return end
-	local mC = StormFox.MapOBBCenter() or Vector(0,0,0)
-	local c_pos = StormFox.GetEyePos() or EyePos()
-	local height = mC.z
+	local height = map_center.z
 	-- Start render
 	local c_a = StormFox.GetData("CloudsAlpha",0)
 	local SE_quality = StormFox.GetExspensive()
@@ -301,8 +289,6 @@ hook.Add("StormFox - MiddleSkyRender","StormFox-CloudsRender",function()
 			RenderDome(c_pos * 0 + Vector(0,0,1 * (0.4 + i * 0.01)),sky_mats[1],255)
 		end
 		-- Render light
-		
-
 	cam.End3D()
 end)
 

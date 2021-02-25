@@ -1,4 +1,3 @@
-
 local max,min,clamp,rad,cos,sin,abs = math.max,math.min,math.Clamp,math.rad,math.cos,math.sin,math.abs
 --[[-------------------------------------------------------------------------
 ConVar
@@ -45,15 +44,30 @@ Potato protection
 --[[-------------------------------------------------------------------------
 Reliable EyePos
 ---------------------------------------------------------------------------]]
-local eyepos = Vector(0,0,0)
-hook.Add("PreDrawTranslucentRenderables","StormFox - EyeFix",function(depth,sky) 
-	if depth or sky then return end 
-	eyepos = EyePos() 
-end)
-
-function StormFox.GetEyePos()
-	return eyepos
-end
+	local view = {}
+		view.pos = Vector(0,0,0)
+		view.ang = Angle(0,0,0)
+		view.fov = 0
+		view.drawviewer = false
+	hook.Add("RenderScene","StormFox - EyeFix",function(origin,ang,fov) 
+		view.pos = origin
+		view.ang = ang
+		view.fov = fov
+	end)
+	hook.Add("PostPlayerDraw","StormFox - EyeFixPPD",function(ply)
+		if not IsValid(ply) then return end
+		if ply ~= LocalPlayer() then return end
+		view.drawviewer = true
+	end)
+	hook.Add("PreRender","StormFox - EyeFixPPDC",function()
+		view.drawviewer = false
+	end)
+	function StormFox.GetCalcViewResult() -- Why isn't there a calcview result in gmod?
+		return view
+	end
+	function StormFox.GetEyePos()
+		return view.pos
+	end
 --[[-------------------------------------------------------------------------
 Outdoor varables
 ---------------------------------------------------------------------------]]
@@ -73,6 +87,11 @@ Outdoor varables
 			mask = mask or LocalPlayer(),
 			filter = filter
 			} )
+			if not t then -- tracer failed, this should not happen. Create a fake result.
+				local t = {}
+					t.HitPos = pos + pos2
+				return t 
+			end
 			t.HitPos = t.HitPos or (pos + pos2)
 			return t
 		end
@@ -80,7 +99,7 @@ Outdoor varables
 			-- Check if we hit anything 'useless'
 			if not traceData.Hit then return false end
 			-- Check entity
-			if traceData.Entity then
+			if IsValid(traceData.Entity) then
 				local m = string.lower(traceData.Entity:GetModel() or "*empty*")
 				if string.match(m,"window") or string.match(m,"glass") then return true end
 			end
@@ -148,7 +167,7 @@ Outdoor varables
 				Is it glass?
 		]]
 		local function HandleSkyPillar(ScanPos,norm,db)
-			local HitPos,HitGlass = CreateSkyPillar(ScanPos or eyepos,norm)
+			local HitPos,HitGlass = CreateSkyPillar(ScanPos or view.pos,norm)
 
 			-- From eyepos. No need to use more tracers
 			if not ScanPos then
@@ -157,7 +176,7 @@ Outdoor varables
 			end
 
 			-- Something is in the way
-			local trace = ETPos(HitPos or ScanPos,eyepos)
+			local trace = ETPos(HitPos or ScanPos,view.pos)
 			--debugoverlay.Line(HitPos or ScanPos,eyepos,4,Color( 255, 255, 255 ),false)
 			if trace.Hit then
 				HitPos = trace.HitPos
@@ -174,7 +193,7 @@ Outdoor varables
 			end
 			if not pos then return end
 			if type(pos) == "Vector" then
-				pos = (FadeDistance - pos:DistToSqr(eyepos)) / FadeDistance
+				pos = (FadeDistance - pos:DistToSqr(view.pos)) / FadeDistance
 			end
 
 			if pos <= 0 then return end -- Throw it out if its 0 or less
@@ -207,7 +226,7 @@ Outdoor varables
 				end
 			-- Scan the enviroment
 				if lEnv > SysTime() then return end
-				local eyepos,eyeang = eyepos,EyeAngles()
+				local eyepos,eyeang = view.pos,view.ang
 				local exp = StormFox.GetExspensive()
 				lEnv = SysTime() + clamp( 1 - exp * 0.1,0.2,2)
 				table.Empty(enviroment)
@@ -286,44 +305,54 @@ Outdoor varables
 --[[-------------------------------------------------------------------------
 Non light_env support
 ---------------------------------------------------------------------------]]
---local con1 = GetConVar("sf_enable_ekstra_lightsupport")
+local con = GetConVar("sf_enable_ekstra_lightsupport")
 local con2 = GetConVar("sf_redownloadlightmaps")
-local lastL,nowL = "-","-"
-local canRedownload = false
-local updateTime = -1
-hook.Add("StormFox - NetDataChange","StormFox - lightfix",function(str,nowL)
-	if str ~= "MapLightChar" then return end
-	--if not con2 or not con2:GetBool() then return end
-	if nowL == lastL then return end
-	lastL = nowL
-	nowL = var
-	updateTime = CurTime() + 4
-end)
-hook.Add("EntityFireBullets","StormFox.DetectBattle",function(ent)
-	if not ent then return end
-	if not type(ent) == "Player" then return end
-	ent.sf_lastshoot = CurTime()
-end)
-function canUpdate(ply)
-	if (ply.sf_lastshoot or 0) + 6 > CurTime() then return false end
-	if ply:GetVelocity():Length() > 20 then return false end
-	return true
-end
+	-- Check settings
+		local function checkCon()
+			if con and con:GetInt() ~= 1 then return false end
+			if con2 and con2:GetInt() ~= 1 then return false end
+			return true
+		end
+	-- Deletect lightchange
+		local lastL,nowL = "-","-"
+		local canRedownload = false
+		local updateTime = -1
+		hook.Add("StormFox - NetDataChange","StormFox - lightfix",function(str,nowL)
+			if str ~= "MapLightChar" then return end
+			if not checkCon() then return false end
+			if nowL == lastL then return end
+			lastL = nowL
+			updateTime = CurTime() + 4
+		end)
+	-- Only allow to change the maplight when inactive
+		hook.Add("EntityFireBullets","StormFox.DetectBattle",function(ent)
+			if not ent then return end
+			if type(ent) ~= "Player" then return end
+			ent.sf_lastshoot = CurTime()
+		end)
+		local function canUpdate(ply)
+			if (ply.sf_lastshoot or 0) + 6 > CurTime() then return false end
+			if ply:GetVelocity():Length() > 20 then return false end
+			return true
+		end
+
 local updateTimeout = 0
 hook.Add("Think","StormFox - LightThink",function()
-	if updateTimeout >= CurTime() then return end
-	if updateTime < 0 then return end
-	if not LocalPlayer() then return end
-	if not canUpdate(LocalPlayer()) then return end
+	if updateTimeout >= CurTime() then return end 	-- Only every 20 seconds
+	if not canRedownload then return end 			-- Only after 10 seconds the map loaded
+	if updateTime < 0 then return end 				-- Only after 4 seconds the value have changed
 	if updateTime > CurTime() then return end
 	updateTime = -1
-	updateTimeout = CurTime() + 30
+	if not checkCon() then 
+		updateTimeout = CurTime() + 10
+		return false 
+	end
+	updateTimeout = CurTime() + 20
 	render.RedownloadAllLightmaps(true)
 end)
-hook.Add("StormFox - PostEntity","StormFox - FixMapBlackness",function()
+hook.Add("StormFox.PostEntity","StormFox.FixMapBlackness",function()
 	timer.Simple(10,function()
-		render.RedownloadAllLightmaps(true)
-		canRedownload = true
+		canRedownload = true -- Allow lightmap to update
 	end)
 end)
 

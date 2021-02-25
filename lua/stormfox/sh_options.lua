@@ -1,9 +1,9 @@
 -- ConCommand
 	concommand.Add("sf_setweather",function( ply, cmd, args, argStr)
 		if CLIENT then return end
-		StormFox.CanEditWeather(ply,function(argStr)
+		StormFox.Permission.SettingsEdit(ply,function()
 			StormFox.SetWeather(argStr,1)
-		end,argStr)
+		end)
 	end,function(cmd,stringargs)
 		--StormFox.GetWeathers()
 		stringargs = string.Trim( stringargs )
@@ -19,18 +19,7 @@
 
 -- SpawnMenu
 	if SERVER then
-
 		util.AddNetworkString("StormFox_Settings")
-		net.Receive("StormFox_Settings",function(len,ply)
-			if not ply then return end
-			if (ply.SF_LAST or 0) > SysTime() then return end
-				ply.SF_LAST = SysTime() + 0.2
-			local con = net.ReadString()
-			local arg = net.ReadString()
-			if not con then return end
-			if not StormFox.convars[con] then return end -- whitelist
-			StormFox.CanEditSetting(ply,con,arg or nil)
-		end)
 	else
 		local function requestSetting(con,arg)
 			if type(arg) == "boolean" then
@@ -45,7 +34,7 @@
 			local con = GetConVar(con_name)
 			if not con then return end
 			local tickbox = vgui.Create("DCheckBoxLabel",panel)
-			tickbox:SetText(con:GetHelpText() or "Unknown setting.")
+			tickbox:SetText(StormFox.Language.Translate(con:GetHelpText() or "Unknown setting."))
 			tickbox:SetValue(con:GetBool())
 			tickbox.con_name = con_name
 			tickbox.func_disable = func_disable
@@ -80,40 +69,33 @@
 					sf_icon:SetImage("stormfox/StormFox.png")
 					sf_icon:SetKeepAspect(false)
 				panel:AddPanel(sf_frame)
-				panel:AddControl( "Header", { Description = "StormFox Client-Settings" } )
+				panel:AddControl( "Header", { Description = "StormFox " .. StormFox.Language.Translate("Client Settings") } )
+			
+			-- Disable effects
+				local tick = clientTrickBox(panel,"sf_disableeffects",function(self)
+					local con = GetConVar("sf_allowcl_disableeffects")
+					local disable = false
+					if not con or not con:GetBool() then -- Missing convar
+						local xx,yy = self:LocalToScreen(0,0 )
+						local x,y = gui.MousePos()
+						local w,h = self:GetSize()
+						if x > xx and y > yy and x < xx + w and y < yy + h then
+							StormFox.DisplayTip(xx,yy,"Disabled on this server.",RealFrameTime())
+						end
+						return true
+					end
+				end)
 			-- Quality Control
-
-				local cb = panel:AddControl( "checkbox", { Label = "Ultra high quality" } )
-				local ultra = cookie.GetNumber("StormFox_ultraqt",0)
-					cb:SetValue( ultra )
-				BAPQT = panel
-				local qt = panel:AddControl( "Slider", { Label = "Weather Quality", Type = "Integer", Command = "sf_exspensive", Min = "0", Max = (ultra == 0 and "7" or "20") } )
+				local qt = panel:AddControl( "Slider", { Label = StormFox.Language.Translate("Weather") .. " " .. StormFox.Language.Translate("Quality"), Type = "Integer", Command = "sf_exspensive", Min = "0", Max = "20" } )
 					qt.auto = false
 				function qt:OnValueChanged(n)
 					if n <= 0 then
 						self.auto = true
-						self:SetText("Weather Quality [AUTO]")
+						self:SetText(StormFox.Language.Translate("Weather") .. " " .. StormFox.Language.Translate("Quality") .. " [AUTO]")
 					else
 						self.auto = false
-						self:SetText("Weather Quality")
+						self:SetText(StormFox.Language.Translate("Weather") .. " " .. StormFox.Language.Translate("Quality"))
 					end
-				end
-
-				function cb:OnChange(bool)
-					if bool then
-						cookie.Set("StormFox_ultraqt",1)
-						qt:SetMax(20)
-					else
-						cookie.Set("StormFox_ultraqt",0)
-						qt:SetMax(7)
-						local con = GetConVar("sf_exspensive")
-						if con:GetFloat() > 7 then
-							RunConsoleCommand("sf_exspensive","7")
-						end
-					end
-					local con = GetConVar("sf_exspensive")
-					qt:SetValue(con:GetFloat())
-					qt:UpdateNotches()
 				end
 				for _,panel in ipairs(qt:GetChildren()) do
 					if panel:GetName() == "DSlider" then
@@ -130,46 +112,31 @@
 					end
 
 					if not self.slider then return end
-					local max = 7 + cookie.GetNumber("StormFox_ultraqt",0) * 13
-					self.slider:SetSlideX(math.min(vel / max,1))
+					self.slider:SetSlideX(math.min(vel / 20,1))
 				end
-			-- Disable effects
-				local tick = clientTrickBox(panel,"sf_disableeffects",function(self)
-					local con = GetConVar("sf_allowcl_disableeffects")
-					local disable = false
-					if not con or not con:GetBool() then -- Missing convar
-						local xx,yy = self:LocalToScreen(0,0 )
-						local x,y = gui.MousePos()
-						local w,h = self:GetSize()
-						if x > xx and y > yy and x < xx + w and y < yy + h then
-							StormFox.DisplayTip(xx,yy,"Disabled on this server.",RealFrameTime())
-						end
-						return true
+			-- Open settings
+				local se_button = mgui.Create("DButton",panel)
+					se_button:SetSize(120,30)
+					se_button:SetText("Settings")
+					se_button:SetDark(true)
+					se_button.DoClick = function()
+						RunConsoleCommand("sf_openclsettings")
 					end
-				end)
-			-- Material
-				clientTrickBox(panel,"sf_material_replacment")
-			-- Sound
-				clientTrickBox(panel,"sf_allow_rainsound")
-				clientTrickBox(panel,"sf_allow_windsound")
-			-- Dynamic lights
-				clientTrickBox(panel,"sf_allow_dynamiclights")
-			-- Sunbeams
-				clientTrickBox(panel,"sf_allow_sunbeams",function() return not render.SupportsPixelShaders_2_0() end)
+				panel:AddPanel(se_button)
 			-- Raindrops
 				clientTrickBox(panel,"sf_allow_raindrops")
 			-- renderscreenspace_effects
 				clientTrickBox(panel,"sf_renderscreenspace_effects")
+			-- Material
+				clientTrickBox(panel,"sf_material_replacment")
+			-- Dynamic lights
+				clientTrickBox(panel,"sf_allow_dynamiclights")
+			-- Sunbeams
+				clientTrickBox(panel,"sf_allow_sunbeams",function() return not render.SupportsPixelShaders_2_0() end)
 			-- Dynamic shadows
-				clientTrickBox(panel,"sf_allow_dynamicshadow")
-			-- Dynamic shadows light
-				local qt = panel:AddControl( "Slider", { Label = "Dynamiclight Amount", Type = "float", Command = "sf_dynamiclightamount", Min = "0", Max = "5" } )
-				local con = GetConVar("sf_dynamiclightamount")
-					qt:SetValue(con:GetFloat())
-			-- Dynamic shadows
-				local ds_button = vgui.Create("DButton",panel)
+				local ds_button = mgui.Create("DButton",panel)
 					ds_button:SetSize(120,30)
-					ds_button:SetText("Set HQ shadow convars.")
+					ds_button:SetText("sf_description.hq_shadowmaterial")
 					ds_button:SetDark(true)
 					ds_button.DoClick = function()
 						local con = GetConVar("mat_depthbias_shadowmap")
@@ -184,43 +151,6 @@
 						end
 					end
 				panel:AddPanel(ds_button)
-			-- redownloadlightmap
-				clientTrickBox(panel,"sf_redownloadlightmaps",function(self)
-						local xx,yy = self:LocalToScreen(0,0 )
-						local x,y = gui.MousePos()
-						local w,h = self:GetSize()
-						if x > xx and y > yy and x < xx + w and y < yy + h then
-							StormFox.DisplayTip(xx,yy,"Disabled as it causes light-errors turning this off.",RealFrameTime())
-						end
-						return true
-					end)
-				local textbox = vgui.Create("DLabel",panel)
-					textbox:SetSize(120,26)
-					textbox:SetDark(true)
-					textbox:SetText("Warning! This option might require you to rejoin when \ndisabled and can cause lag on large maps.")
-				panel:AddPanel(textbox)
-		end
-		local function adminTrickBox(panel,con_name)
-			local con = GetConVar(con_name)
-			if not con then return end
-			local tickbox = vgui.Create("DCheckBoxLabel",panel)
-			tickbox:SetText(con:GetHelpText() or "Unknown setting.")
-			tickbox:SetValue(con:GetBool())
-			tickbox.con_name = con_name
-			tickbox:SetDark( true )
-			function tickbox:OnChange(b)
-				requestSetting(self.con_name,b and "1" or "0")
-			end
-			function tickbox:Think()
-				if self.Think2 then self:Think2() end
-				if not self.con_name then return end
-				local ucon = StormFox.GetNetworkData("con_" .. self.con_name)
-				if (ucon == "1") ~= self:GetValue() then
-					self:SetChecked(ucon == "1")
-				end
-			end
-			panel:AddItem(tickbox)
-			return tickbox
 		end
 		local function admin_settings(panel)
 			-- Icon
@@ -233,82 +163,11 @@
 					sf_icon:SetKeepAspect(false)
 					sf_icon:SetImageColor(Color(255,255,0))
 				panel:AddPanel(sf_frame)
-				panel:AddControl( "Header", { Description = "StormFox Server-Settings (Admin only)" } )
-			-- MoonScale
-				local con = GetConVar("sf_moonscale")
-				local ms = 6
-				if con then
-					ms = con:GetFloat() or 6
-				end
-				local moon_scale = vgui.Create("DNumSlider",panel)
-					moon_scale:SetText("Moon Scale")
-					moon_scale:SetMin(0)
-					moon_scale:SetMax(80)
-					moon_scale:SetDecimals(0)
-					moon_scale:SetValue(ms)
-					moon_scale:SizeToContents()
-					moon_scale:SetDark( true )
-				function moon_scale:OnValueChanged(n)
-					requestSetting("sf_moonscale",math.Round(n) .. "")
-				end
-				panel:AddItem(moon_scale)
-			-- SunMoonAngle
-				local con = GetConVar("sf_sunmoon_yaw")
-				local ms = 270
-				if con then
-					ms = con:GetFloat() or 270
-				end
-				local moon_scale = vgui.Create("DNumSlider",panel)
-					moon_scale:SetText(con:GetHelpText())
-					moon_scale:SetMin(0)
-					moon_scale:SetMax(360)
-					moon_scale:SetDecimals(0)
-					moon_scale:SetValue(ms)
-					moon_scale:SizeToContents()
-					moon_scale:SetDark( true )
-				function moon_scale:OnValueChanged(n)
-					requestSetting("sf_sunmoon_yaw",math.Round(n) .. "")
-				end
-				panel:AddItem(moon_scale)
-			-- Allow people to disable effects
-				local de_button = adminTrickBox(panel,"sf_allowcl_disableeffects")
-				function de_button:Think2()
-					local xx,yy = self:LocalToScreen(0,0 )
-					local x,y = gui.MousePos()
-					local w,h = self:GetSize()
-					if x > xx and y > yy and x < xx + w and y < yy + h then
-						StormFox.DisplayTip(xx,yy,"Allows clients to disable SF effects. (Clients might get an unfair advantage in heavy rain with this.)",RealFrameTime())
-					end
-				end
-			-- Follow localtime
-				adminTrickBox(panel,"sf_realtime")
-			-- Disable autoweather
-				adminTrickBox(panel,"sf_disable_autoweather")
-			-- Disable fog
-				adminTrickBox(panel,"sf_disablefog")
-			-- Disable windpush
-				adminTrickBox(panel,"sf_disable_windpush")
-			-- Disable damage and debuffs
-				adminTrickBox(panel,"sf_disableweatherdebuffs")
-			-- Disable lightning bolts
-				adminTrickBox(panel,"sf_disablelightningbolts")
-			-- Disable skybox
-				adminTrickBox(panel,"sf_disableskybox")
-			-- Disable light bloom
-				adminTrickBox(panel,"sf_disable_mapbloom")
-			-- Disable sf mapbrowser changing maps
-				adminTrickBox(panel,"sf_disblemapbrowser")
-			-- Disable mapsupport
-				adminTrickBox(panel,"sf_disable_mapsupport")
-				local textbox = vgui.Create("DLabel",panel)
-					textbox:SetSize(120,14)
-					textbox:SetDark(true)
-					textbox:SetText("        (Requires mapchange to work.)")
-				panel:AddPanel(textbox)
+				panel:AddControl( "Header", { Description = "StormFox " .. StormFox.Language.Translate("Server Settings") } )
 			-- Weather Menu
-				local ds_button = vgui.Create("DButton",panel)
+				local ds_button = mgui.Create("DButton",panel)
 					ds_button:SetSize(120,30)
-					ds_button:SetText("Open weather menu.")
+					ds_button:SetText("Weather Controller")
 					ds_button:SetDark(true)
 					ds_button.DoClick = function()
 						if StormFox.OpenWeatherMenu then
@@ -317,57 +176,41 @@
 					end
 				panel:AddPanel(ds_button)
 			-- Map settings
-				local ms_button = vgui.Create("DButton",panel)
+				local ms_button = mgui.Create("DButton",panel)
 					ms_button:SetSize(120,30)
-					ms_button:SetText("Open map settings.")
+					ms_button:SetText("Settings")
 					ms_button:SetDark(true)
 					ms_button.DoClick = function()
-						StormFox.MapSettings()
+						net.Start("sf_mapsettings")
+							net.WriteString("menu")
+							net.WriteInt(-1,4)
+						net.SendToServer()
 						LocalPlayer():EmitSound("ui/buttonclickrelease.wav")
 					end
-
+				panel:AddPanel(ms_button)
+			-- Troubleshooter
+				local ms_button = mgui.Create("DButton",panel)
+					ms_button:SetSize(120,30)
+					ms_button:SetText("Troubleshooter")
+					ms_button:SetDark(true)
+					ms_button.DoClick = function()
+						net.Start("sf_mapsettings")
+							net.WriteString("menu")
+							net.WriteInt(4,4)
+						net.SendToServer()
+						LocalPlayer():EmitSound("ui/buttonclickrelease.wav")
+					end
 				panel:AddPanel(ms_button)
 			-- Map browser
-				local ds_button = vgui.Create("DButton",panel)
+				local ds_button = mgui.Create("DButton",panel)
 					ds_button:SetSize(120,30)
-					ds_button:SetText("Open map browser.")
+					ds_button:SetText("Map Browser")
 					ds_button:SetDark(true)
 					ds_button.DoClick = function()
 						RunConsoleCommand("sf_open_mapbrowser")
 						LocalPlayer():EmitSound("ui/buttonclickrelease.wav")
 					end
-
 				panel:AddPanel(ds_button)
-			-- Debugger
-				adminTrickBox(panel,"sf_debugcompatibility")
-				local textbox = vgui.Create("DLabel",panel)
-				textbox:SetSize(120,14)
-					textbox:SetDark(true)
-					textbox:SetText("        (Requires mapchange and will override hook.Call)")
-				panel:AddPanel(textbox)
-			-- Ekstra lightsupport
-				adminTrickBox(panel,"sf_enable_ekstra_lightsupport")
-				local textbox = vgui.Create("DLabel",panel)
-				textbox:SetSize(120,14)
-					textbox:SetDark(true)
-					textbox:SetText("        (Can lag on large maps!)")
-				panel:AddPanel(textbox)
-			-- Block removal of light_environment
-				local block = adminTrickBox(panel,"sf_block_lightenvdelete")
-				local textbox = vgui.Create("DLabel",panel)
-				textbox:SetSize(120,14)
-					textbox:SetDark(true)
-					textbox:SetText("        (Can cause light-flickering)")
-				panel:AddPanel(textbox)
-				function block:Think2()
-					local xx,yy = self:LocalToScreen(0,0 )
-					local x,y = gui.MousePos()
-					local w,h = self:GetSize()
-					if x > xx and y > yy and x < xx + w and y < yy + h then
-						StormFox.DisplayTip(xx,yy,"Prevents the entity from getting deleted. However this can cause some light-flickering and requires map-restart when toggled.",RealFrameTime())
-					end
-				end
-
 		end
 		hook.Add( "PopulateToolMenu", "Populate StormFox Menus", function()
 			spawnmenu.AddToolMenuOption( "Options", "StormFox", "User_StormFox", "Client Settings", "", "", client_settings )
@@ -381,13 +224,11 @@
 	if SERVER then
 		util.AddNetworkString("StormFox - WeatherC")
 		net.Receive("StormFox - WeatherC",function(len,ply)
-			if not ply:IsAdmin() then ply:EmitSound("common/wpn_denyselect.wav") return end -- Noooope
-			if not ply:GetEyeTrace().Entity then ply:EmitSound("common/wpn_denyselect.wav") return end
 			ply:EmitSound("common/bugreporter_succeeded.wav")
 			local msg = net.ReadBool()
 			local str = net.ReadString()
 			local var = net.ReadType()
-			StormFox.CanEditWeather(ply,function(str,var,msg)
+			StormFox.Permission.SettingsEdit(ply,function()
 				if msg == false then
 					StormFox.SetWeather(str,var)
 				elseif str == "time_set" then
@@ -399,11 +240,11 @@
 				else
 					StormFox.SetNetworkData(str,var)
 				end
-			end,str,var,msg)
+			end)
 		end)
 	else
 	-- Fonts, functions and data
-		surface.CreateFont( "SkyFox-Console_B", {
+		surface.CreateFont( "StormFox-Console_B", {
 			font = "Arial", -- Use the font-name which is shown to you by your operating system Font Viewer, not the file name
 			extended = false,
 			size = 30,
@@ -420,7 +261,7 @@
 			additive = false,
 			outline = false,
 		} )
-		surface.CreateFont( "SkyFox-Console", {
+		surface.CreateFont( "StormFox-Console", {
 			font = "Arial", -- Use the font-name which is shown to you by your operating system Font Viewer, not the file name
 			extended = false,
 			size = 20,
@@ -437,7 +278,7 @@
 			additive = false,
 			outline = false,
 		} )
-		surface.CreateFont( "SkyFox-Console_Small", {
+		surface.CreateFont( "StormFox-Console_Small", {
 			font = "Arial", -- Use the font-name which is shown to you by your operating system Font Viewer, not the file name
 			extended = false,
 			size = 14,
@@ -462,7 +303,7 @@
 			colors[4] = Color(47,50,55)
 		local weathers = {}
 		local tselected = 1
-		hook.Add("StormFox - PostInit","StormFox - MenuInit",function()
+		hook.Add("StormFox.PostInit","StormFox.MenuInit",function()
 			weathers = StormFox.GetWeathers()
 			tselected = StormFox.GetWeathersDefaultNumber()
 		end)
@@ -479,7 +320,9 @@
 		local function CreateButton(panel,text)
 			local button = vgui.Create("DButton",panel)
 			button:SetText("")
-			button:SetSize(120,22)
+			surface.SetFont("StormFox-Console")
+			local size = math.max(120,surface.GetTextSize(text) + 6)
+			button:SetSize(size,22)
 			button.text = text or ""
 			function button:Paint(w,h)
 				if self:IsDown() then
@@ -505,17 +348,19 @@
 					e = "_"
 				end
 				surface.SetTextColor(col)
-				surface.SetFont("SkyFox-Console")
+				surface.SetFont("StormFox-Console")
 				local tw,th = surface.GetTextSize(self.text .. e)
 				surface.SetTextPos(w / 2 - tw / 2,h / 2 - th / 2)
 				surface.DrawText(self.text .. e)
 			end
-			return button
+			return button,size
 		end
 		local function CreateSmallButton(panel,text)
 			local button = vgui.Create("DButton",panel)
 			button:SetText("")
-			button:SetSize(60,12)
+			surface.SetFont("StormFox-Console_Small")
+			local size = math.max(surface.GetTextSize(text) + 6,60)
+			button:SetSize(size,12)
 			button.text = text or ""
 			function button:Paint(w,h)
 				if self:IsDown() then
@@ -537,7 +382,7 @@
 					col.a = 25
 				end
 				surface.SetTextColor(col)
-				surface.SetFont("SkyFox-Console_Small")
+				surface.SetFont("StormFox-Console_Small")
 				local tw,th = surface.GetTextSize(self.text)
 				surface.SetTextPos(w / 2 - tw / 2,h / 2 - th / 2)
 				local e = ""
@@ -546,7 +391,7 @@
 				end
 				surface.DrawText(self.text .. e)
 			end
-			return button
+			return button,size
 		end
 		local function CreateSlider(panel,wi,he)
 			local slider = vgui.Create("DButton",panel)
@@ -578,8 +423,8 @@
 		local mat = Material("gui/gradient")
 		local cross = Material("debug/particleerror")
 		local check = Material("vgui/hud/icon_check")
-		local function drawStatus(name,x,y,bool,helptext,self)
-			local cx,cy = self:CursorPos()
+		local function drawStatus(name,x,y,bool,helptext,p_self)
+			local cx,cy = p_self:CursorPos()
 			surface.SetTextPos(x + 19,y)
 			if bool then
 				surface.SetTextColor(0,255,0)
@@ -591,10 +436,10 @@
 				surface.SetMaterial(cross)
 			end
 			if cx > x and cx < x + 150 and cy > y and cy < y + 16 then
-				local xx,yy = self:LocalToScreen( x,y + 7 )
+				local xx,yy = p_self:LocalToScreen( x,y + 7 )
 				StormFox.DisplayTip(xx,yy,helptext,1)
 			end
-			surface.SetFont("SkyFox-Console_Small")
+			surface.SetFont("StormFox-Console_Small")
 			surface.DrawText(name)
 			surface.DrawTexturedRect(x,y + 1,14,14)
 		end
@@ -621,38 +466,43 @@
 				surface.DrawRect(0,0,w,self.h)
 				surface.DrawTexturedRectRotated(w - 10 ,self.h / 2,20,self.h,180)
 				surface.DrawTexturedRectRotated(10 ,self.h / 2,20,self.h,0)
-				draw.DrawText("Map Entities","SkyFox-Console_Small",w / 2,0,Color(255,255,255),1)
+				draw.DrawText("Map Entities","StormFox-Console_Small",w / 2,0,Color(255,255,255),1)
 				local t = {}
 					t["light_environment"] = "Enables smooth light-controls and doesn't require extra light support to make the map dark."
 					t["env_tonemap_controller"] = "Enables light-bloom/tonemap effects."
 					t["env_fog_controller"] = "Allows to control and edit fog."
 					t["env_skypaint"] = "Allows to paint and edit the sky."
 					t["shadow_control"] = "This map have source shadows."
+					t[".ain nodes"] = "Allows special map-effects."
 
 				local y = 0
 				local i = 0
 				for str,helptext in pairs(t) do
 					i = i + 1
-					local b = StormFox.GetNetworkData("has_" .. str,false)
+					local b = false
+					if str == ".ain nodes" then
+						b = StormFox.AIAinIsValid()
+					else
+						b = StormFox.GetNetworkData("has_" .. str,false)
+					end
 					drawStatus(str,5,i * 16,b,helptext,self)
 					y = i * 16 + 16
 				end
 				drawStatus("3D skybox",5,y,StormFox.Is3DSkybox(),"Allows better and further distant dynamic light.",self)
 
 				if StormFox.GetNetworkData("has_trigger",false) then
-					draw.DrawText("Extra map support","SkyFox-Console_Small",w / 2,y + 16,Color(255,255,255),1)
+					draw.DrawText("Extra map support","StormFox-Console_Small",w / 2,y + 16,Color(255,255,255),1)
 					drawStatus("Map Effects/ Triggers",5,y + 32,true,"This map have extra light-effects and triggers.",self)
 					y = y + 49
 				end
 				self.h = y + 19
 			end
-
 			STORMFOX_MPANEL = panel
 			return panel
 		end
 	-- HUDMenu
 		local m_info = Material("icon16/information.png")
-		local m_browser = Material("icon16/map.png")
+		local m_setings = Material("icon16/cog_edit.png")
 		function StormFox.OpenWeatherMenu()
 			if STORMFOX_WPANEL and IsValid(STORMFOX_WPANEL) then
 				STORMFOX_WPANEL:Remove()
@@ -690,7 +540,7 @@
 						end
 						LocalPlayer():EmitSound("ui/buttonclick.wav")
 					end
-			-- Map browser
+			-- Settings
 				local MapInfo_Button = vgui.Create("DButton",panel)
 					function MapInfo_Button:Paint() end
 					MapInfo_Button:SetText("")
@@ -698,16 +548,19 @@
 					MapInfo_Button:SetPos(pw - 84,1)
 					function MapInfo_Button:PaintOver(w,h)
 						surface.SetDrawColor(Color(255,255,255))
-						surface.SetMaterial(m_browser)
+						surface.SetMaterial(m_setings)
 						surface.DrawTexturedRect(w * 0.1,h * 0.1,w * 0.85,h * 0.85)
 					end
 					function MapInfo_Button:DoClick()
-						RunConsoleCommand("sf_open_mapbrowser")
+						net.Start("sf_mapsettings")
+							net.WriteString("menu")
+							net.WriteInt(-1,4)
+						net.SendToServer()
 						LocalPlayer():EmitSound("ui/buttonclickrelease.wav")
 					end
 			-- Select Weather
-				local SetWeather = CreateButton(panel,"Set Weather")
-				SetWeather:SetPos(pw / 2 - 60,28)
+				local SetWeather,SetWeather_size = CreateButton(panel,StormFox.Language.Translate("sf_setweather"))
+				SetWeather:SetPos(pw / 2 - SetWeather_size / 2,28)
 				local mat = StormFox.GetWeatherType(weathers[tselected]):GetStaticIcon( )
 				local selectedweather = vgui.Create("DImage",panel)
 					selectedweather:SetSize(32,32)
@@ -812,9 +665,9 @@
 					label.text = "Temperature: " .. n .. "°C - " .. round(StormFox.CelsiusToFahrenheit(n),1) .. "°F"
 					function label:Paint(w,h)
 						local n = round(StormFox.GetNetworkData("Temperature",20),1)
-						label.text = "Temperature: " .. n .. "°C - " .. round(StormFox.CelsiusToFahrenheit(n),1) .. "°F"
+						label.text = StormFox.Language.Translate("Temperature") .. ": " .. n .. "°C - " .. round(StormFox.CelsiusToFahrenheit(n),1) .. "°F"
 						surface.SetTextColor(colors[1])
-						surface.SetFont("SkyFox-Console_Small")
+						surface.SetFont("StormFox-Console_Small")
 						local tw,th = surface.GetTextSize(label.text)
 						surface.SetTextPos(w / 2 - tw / 2,h / 2 - th / 2)
 						surface.DrawText(label.text)
@@ -841,20 +694,20 @@
 					label:SetSize(160,20)
 					label:SetPos(pw / 2 - 80,134)
 					local n = round(StormFox.GetNetworkData("Wind",0),1)
-					label.text = "Wind: " .. n
+					label.text = StormFox.Language.Translate("Wind") .. ": " .. n
 					function label:Paint(w,h)
 						local n = round(StormFox.GetNetworkData("Wind",0),1)
 						local b,str = StormFox.GetBeaufort(n)
-						label.text = "Wind: " .. n .. " " .. str
+						label.text = StormFox.Language.Translate("Wind") .. ": " .. n .. " " .. StormFox.Language.Translate(str)
 						surface.SetTextColor(colors[1])
-						surface.SetFont("SkyFox-Console_Small")
+						surface.SetFont("StormFox-Console_Small")
 						local tw,th = surface.GetTextSize(label.text)
 						surface.SetTextPos(w / 2 - tw / 2,h / 2 - th / 2)
 						surface.DrawText(label.text)
 					end
 				local tslider = CreateSlider(panel,140,14)
 					tslider:SetPos(pw / 2 - 70,150)
-					tslider.var = StormFox.GetNetworkData("Wind",0) / 50
+					tslider.var = StormFox.GetNetworkData("Wind",0) / 75
 					function tslider:DoClick()
 						local w,h = self:GetSize()
 						local x,y = self:CursorPos()
@@ -862,16 +715,16 @@
 						net.Start("StormFox - WeatherC")
 							net.WriteBool(true)
 							net.WriteString("Wind")
-							net.WriteType(percent * 50)
+							net.WriteType(percent * 75)
 						net.SendToServer()
 					end
 					function tslider:Think()
-						self.var = StormFox.GetNetworkData("Wind",0) / 50
+						self.var = StormFox.GetNetworkData("Wind",0) / 75
 					end
 			-- WindAngle
 				local windang = vgui.Create("DButton",panel)
-					windang:SetSize(80,80)
-					windang:SetPos(pw / 2 - 40,122 + 56)
+					windang:SetSize(90,90)
+					windang:SetPos(pw / 2 - 45,122 + 50)
 					windang:SetText("")
 				function windang:Paint(w,h)
 					-- Generate poly
@@ -910,8 +763,8 @@
 						surface.SetDrawColor(colors[2])
 					end
 					surface.DrawTexturedRect(n,n,w - n * 2,h - n * 2)
-					local text = "Set WindAngle"
-					surface.SetFont("SkyFox-Console_Small")
+					local text = StormFox.Language.Translate("sf_setwindangle")
+					surface.SetFont("StormFox-Console_Small")
 					local tw,th = surface.GetTextSize(text)
 					surface.SetTextColor(colors[1])
 					surface.SetTextPos(w / 2 - tw / 2,h / 2 - th / 2)
@@ -925,7 +778,7 @@
 					net.SendToServer()
 				end
 			-- Time options
-				local ampm = cookie.GetNumber("stormfox-ampm",0)
+				local ampm = cookie.GetNumber("StormFox - ampm",0)
 				local settimeoption = vgui.Create("DPanel",panel)
 					settimeoption:SetSize(pw - 40,24)
 					settimeoption:SetPos(20,280)
@@ -933,7 +786,7 @@
 					for k,v in pairs(settimeoption:GetChildren()) do
 						v:Remove()
 					end
-					local ampm = cookie.GetNumber("stormfox-ampm",0)
+					local ampm = cookie.GetNumber("StormFox - ampm",0)
 					local sw,sh = settimeoption:GetSize()
 					local time = StormFox.GetRealTime(nil,ampm == 1)
 					local h = string.match(time,"(%d+):")
@@ -983,12 +836,12 @@
 							self.editing = false
 						elseif self.editing then
 							for i = 0,9 do
-								if input.IsKeyDown(i + 1) and i ~= self.lastkey then
+								if (input.IsKeyDown(i + 1) or input.IsKeyDown(i + 37)) and i ~= self.lastkey then
 									self.text = self.text .. i
 									self.lastkey = i
 								end
 							end
-							if self.lastkey and not input.IsKeyDown(self.lastkey + 1) then
+							if self.lastkey and not (input.IsKeyDown(self.lastkey + 1) or input.IsKeyDown(self.lastkey + 37)) then
 								self.lastkey = nil
 							end
 						end
@@ -1017,12 +870,12 @@
 					LocalPlayer():EmitSound("ui/buttonclick.wav")
 					ampm = 1 - ampm
 					ampmtoggle.text = ampm == 0 and "AM/PM" or "24 clock"
-					cookie.Set("stormfox-ampm",ampm .. "")
+					cookie.Set("StormFox - ampm",ampm .. "")
 					SetTimeOption()
 				end
-				local settimebutton = CreateButton(panel,"SetTime")
-				settimebutton:SetSize(pw - 40,24)
-				settimebutton:SetPos(20,308)
+				local settimebutton,settimebutton_size = CreateButton(panel,StormFox.Language.Translate("sf_settime"))
+				settimebutton:SetSize(settimebutton_size,24)
+				settimebutton:SetPos( (pw - settimebutton_size) / 2 ,308)
 				function settimebutton:DoClick()
 					local str = settimeoption.hour.text .. ":" .. settimeoption.min.text
 					if settimeoption.ampmb and settimeoption.ampmb.text then
@@ -1046,7 +899,7 @@
 				end
 				function symbol:DoClick()
 					local cur = StormFox.GetTimeSpeed()
-					local default = self.default or 1
+					local default = self.default or 60
 					if cur > 0 then
 						self.default = cur
 						-- Set 0
@@ -1112,7 +965,7 @@
 					net.Start("StormFox - WeatherC")
 						net.WriteBool(true)
 						net.WriteString("time_speed")
-						net.WriteType(speed .. "")
+						net.WriteType(speed * 60 .. "")
 					net.SendToServer()
 				end
 				function time_speed:Think()
@@ -1140,13 +993,13 @@
 				end
 
 			local blabel = vgui.Create("DLabel",panel)
-				blabel.text = "Hold C"
+				blabel.text = "sf_holdc"
 				blabel:SetText("")
-				blabel:SetSize(160,20)
+				blabel:SetSize(pw,20)
 			function blabel:Paint(w,h)
-				local t = openChat and "Close chat to interact" or gui.IsConsoleVisible() and "Close console" or self.text
+				local t = StormFox.Language.Translate(openChat and "sf_interface_closechat" or gui.IsConsoleVisible() and "sf_interface_closeconsole" or self.text)
 				surface.SetTextColor(colors[1])
-				surface.SetFont("SkyFox-Console")
+				surface.SetFont("StormFox-Console")
 				local tw,th = surface.GetTextSize(t)
 				surface.SetTextPos(w / 2 - tw / 2,h / 2 - th / 2)
 				surface.DrawText(t)
@@ -1164,7 +1017,7 @@
 					self:SetKeyboardInputEnabled(false)
 				end
 			end
-			blabel:SetPos(pw / 2 - 80,ph - 20)
+			blabel:SetPos(0,ph - 20)
 			panel:SetPos((ScrW() / 4 ) * 3 - pw / 2,ScrH() / 6)
 			--panel:MakePopup()
 			panel.btnMaxim:SetVisible( false )
@@ -1180,13 +1033,25 @@
 			return true
 		end)
 		list.Set( "DesktopWindows", "StormFox", {
-			title		= "StormFox",
+			title		= StormFox.Language.Translate("Controller"),
 			icon		= "stormfox/SF.png",
 			width		= 960,
 			height		= 700,
 			onewindow	= true,
 			init		= function(icon)
 				StormFox.OpenWeatherMenu()
+				icon.Window:Remove()
+				LocalPlayer():EmitSound("garrysmod/ui_click.wav")
+			end
+			})
+		list.Set( "DesktopWindows", "StormFox-CL", {
+			title		= StormFox.Language.Translate("Client Settings"),
+			icon		= "stormfox/SF_cl_settings.png",
+			width		= 960,
+			height		= 700,
+			onewindow	= true,
+			init		= function(icon)
+				StormFox.OpenClientSettings()
 				icon.Window:Remove()
 				LocalPlayer():EmitSound("garrysmod/ui_click.wav")
 			end
